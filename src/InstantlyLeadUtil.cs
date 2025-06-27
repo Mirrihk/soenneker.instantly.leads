@@ -14,6 +14,7 @@ using Soenneker.Instantly.OpenApiClient.Models;
 using Soenneker.Extensions.Task;
 using System.Linq;
 using Soenneker.Instantly.OpenApiClient.Api.V2.Leads.List;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Soenneker.Instantly.Leads;
 
@@ -60,45 +61,14 @@ public sealed class InstantlyLeadUtil : IInstantlyLeadUtil
 
     public async ValueTask<Def11?> GetByEmail(string email, string? campaignId = null, CancellationToken cancellationToken = default)
     {
-        email = email.ToLowerInvariantFast();
-
-        if (_log)
-            _logger.LogDebug("Getting lead from Instantly with email ({email}) and campaign ({CampaignId})...", email, campaignId);
-
-        InstantlyOpenApiClient client = await _instantlyClient.Get(cancellationToken).NoSync();
-
-        var requestBody = new ListPostRequestBody
-        {
-            Contacts = [email],
-            Limit = 1
-        };
-        if (campaignId != null)
-            requestBody.Campaign = Guid.Parse(campaignId);
-
-        ListPostResponse? response = await client.Api.V2.Leads.List.PostAsListPostResponseAsync(requestBody, config => { }, cancellationToken).NoSync();
-
-        return response?.Items?.FirstOrDefault();
+        var leads = await GetLeadsByEmail(email, campaignId, limit: 1, cancellationToken);
+        return leads?.FirstOrDefault();
     }
 
     public async ValueTask<List<Def11>?> Search(string email, string? campaignId = null, CancellationToken cancellationToken = default)
     {
-        email = email.ToLowerInvariantFast();
-
-        if (_log)
-            _logger.LogDebug("Searching for lead from Instantly with email ({email}) and campaign ({CampaignId})...", email, campaignId);
-
-        InstantlyOpenApiClient client = await _instantlyClient.Get(cancellationToken).NoSync();
-
-        var requestBody = new ListPostRequestBody
-        {
-            Contacts = [email]
-        };
-        if (campaignId != null)
-            requestBody.Campaign = Guid.Parse(campaignId);
-
-        ListPostResponse? response = await client.Api.V2.Leads.List.PostAsListPostResponseAsync(requestBody, config => { }, cancellationToken).NoSync();
-
-        return response?.Items;
+        var leads = await GetLeadsByEmail(email, campaignId, cancellationToken: cancellationToken);
+        return leads;
     }
 
     public async ValueTask<Def11?> Delete(List<string> emails, string? campaignId = null, CancellationToken cancellationToken = default)
@@ -130,5 +100,34 @@ public sealed class InstantlyLeadUtil : IInstantlyLeadUtil
         }
 
         return response.Items.FirstOrDefault();
+    }
+
+    private async ValueTask<List<Def11>?> GetLeadsByEmail(string email, string? campaignId, int? limit = null, CancellationToken cancellationToken = default)
+
+    
+    {
+        email = email.ToLowerInvariantFast();
+
+        if (_log)
+        {
+            _logger.LogDebug($"Fetching leads from Instantly with email ({email}) and campaign ({campaignId})...", email, campaignId, limit);
+        }
+
+        InstantlyOpenApiClient client = await _instantlyClient.Get(cancellationToken).NoSync();
+
+        var requestBody = new ListPostRequestBody
+        {
+            Contacts = [email],
+            Limit = limit ?? 0
+        };
+
+        if (campaignId != null)
+        {
+            requestBody.Campaign = Guid.Parse(campaignId);
+        }
+
+        ListPostResponse? response = await client.Api.V2.Leads.List.PostAsListPostResponseAsync(requestBody, config => { }, cancellationToken).NoSync();
+        
+        return response?.Items;
     }
 }
